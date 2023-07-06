@@ -31,21 +31,39 @@ def get_unfulfilled_products_by_country(start_date=None):
         shopify.ShopifyResource.set_site(shop_url)
 
         try:
+            # Get paid orders
             paid_orders = shopify.Order.find(
                 financial_status="paid",
                 fulfillment_status="unfulfilled",
                 created_at_min=created_at_min,
             )
 
+            # Remove cancelled orders
+            paid_orders = [order for order in paid_orders if order.cancelled_at is None]
+
+            # Get COD orders
             if shop in cod:
                 pending_orders = shopify.Order.find(
-                    financial_status="pending",
+                    # financial_status="pending",
                     fulfillment_status="unfulfilled",
                     created_at_min=created_at_min,
                 )
+
+                # Remove voided orders
+                pending_orders = [
+                    order for order in pending_orders if order.financial_status != "voided"
+                ]
+
+                # Remove cancelled orders
+                pending_orders = [
+                    order for order in pending_orders if order.cancelled_at is None
+                ]
+
                 cod_orders = [
                     order for order in pending_orders if "COD" in order.tags.split(", ")
                 ]
+
+
                 orders = paid_orders + cod_orders
             else:
                 orders = paid_orders
@@ -125,8 +143,8 @@ def handle_500(e):
     return {"error": str(e)}, 500
 
 
-@app.route("/shopify/unfulfilled-orders/sku", methods=["GET"])
-def sendcloud_unfulfilled_orders_sku():
+@app.route("/shopify/unfulfilled/sku", methods=["GET"])
+def shopify_unfilfilled_sku():
     # Get the data
 
     days_before = request.args.get("days_before")
@@ -140,4 +158,4 @@ def sendcloud_unfulfilled_orders_sku():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5500)
+    app.run(debug=True, port=5666)
