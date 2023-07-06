@@ -1,0 +1,7 @@
+ShopifyAPI
+python-dotenv
+
+# 
+black
+isort
+flake8
