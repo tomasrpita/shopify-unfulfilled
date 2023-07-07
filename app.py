@@ -11,7 +11,7 @@ load_dotenv()
 shops = ["ES", "FR", "IT", "NL"]
 
 # "Cash on Delivery" (COD)
-cod = ["ES", "IT"]
+# cod = ["ES", "IT"]
 
 def iter_all_orders(orders_params):
     """
@@ -55,8 +55,8 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
 
         # Get orders between created_at_min and created_at_max
         orders_params= {
-            "financial_status":"paid",
-            "fulfillment_status":"unfulfilled",
+            # "financial_status":"paid",
+            # "fulfillment_status":"unfulfilled",
             "created_at_min":created_at_min,
             "created_at_max":created_at_max,
             "limit":250
@@ -71,27 +71,38 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
             
             paid_orders = [order for order in paid_orders if order.cancelled_at is None]
 
-            if shop in cod:
-                # Modify the financial_status in params for querying COD orders
-                orders_params['financial_status']='pending'
-                # pending_orders = shopify.Order.find(**orders_params)
-                pending_orders = list(iter_all_orders(orders_params=orders_params))
+            avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
+            avoid_financial_status = ["voided", "refunded", "partially_refunded"]
 
-                pending_orders = [
-                    order for order in pending_orders if order.financial_status != "voided"
-                ]
+            paid_orders = [
+                order
+                for order in paid_orders
+                if order.fulfillment_status not in avoid_fullfilled_status and order.financial_status not in avoid_financial_status
+            ]
 
-                pending_orders = [
-                    order for order in pending_orders if order.cancelled_at is None
-                ]
+            # if shop in cod:
+            #     # Modify the financial_status in params for querying COD orders
+            #     orders_params['financial_status']='pending'
+            #     # pending_orders = shopify.Order.find(**orders_params)
+            #     pending_orders = list(iter_all_orders(orders_params=orders_params))
 
-                cod_orders = [
-                    order for order in pending_orders if "COD" in order.tags.split(", ")
-                ]
+            #     pending_orders = [
+            #         order for order in pending_orders if order.financial_status != "voided"
+            #     ]
 
-                orders = paid_orders + cod_orders
-            else:
-                orders = paid_orders
+            #     pending_orders = [
+            #         order for order in pending_orders if order.cancelled_at is None
+            #     ]
+
+            #     cod_orders = [
+            #         order for order in pending_orders if "COD" in order.tags.split(", ")
+            #     ]
+
+            #     orders = paid_orders + cod_orders
+            # else:
+            #     orders = paid_orders
+
+            orders = paid_orders
 
             sku_counts = {}
             for order in orders:
