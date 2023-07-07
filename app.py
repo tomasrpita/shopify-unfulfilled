@@ -74,10 +74,19 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
             avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
             avoid_financial_status = ["voided", "refunded", "partially_refunded"]
 
+            # allowed_financial_status = ["paid", "partially_paid", "authorized", "pending"]
+            
+
             paid_orders = [
                 order
                 for order in paid_orders
-                if order.fulfillment_status not in avoid_fullfilled_status and order.financial_status not in avoid_financial_status
+                if order.fulfillment_status not in avoid_fullfilled_status
+            ]
+
+            paid_orders = [
+                order
+                for order in paid_orders
+                if order.financial_status not in avoid_financial_status
             ]
 
             # if shop in cod:
