@@ -69,8 +69,6 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
             
             paid_orders = list(iter_all_orders(orders_params=orders_params))
             
-            print(type(paid_orders))
-
             paid_orders = [order for order in paid_orders if order.cancelled_at is None]
 
             if shop in cod:
