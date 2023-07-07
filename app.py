@@ -13,6 +13,21 @@ shops = ["ES", "FR", "IT", "NL"]
 # "Cash on Delivery" (COD)
 cod = ["ES", "IT"]
 
+def iter_all_orders(orders_params):
+    """
+    This function iterates over all the orders in the shopify store.
+    The shopify API only returns 250 orders per request, so we need to iterate over all the pages.
+    """
+    
+    orders = shopify.Order.find(**orders_params)
+    for order in orders:
+        yield order
+    
+    while orders.has_next_page():
+        orders = orders.next_page()
+        for order in orders:
+            yield order
+        
 
 def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     created_at_min = ""
@@ -43,20 +58,26 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
             "financial_status":"paid",
             "fulfillment_status":"unfulfilled",
             "created_at_min":created_at_min,
-            "created_at_max":created_at_max
+            "created_at_max":created_at_max,
+            "limit":250
         }
 
         try:
 
             # The common_params will be used for querying both paid and pending orders.
-            paid_orders = shopify.Order.find(**orders_params)
+            # paid_orders = shopify.Order.find(**orders_params)
+            
+            paid_orders = list(iter_all_orders(orders_params=orders_params))
+            
+            print(type(paid_orders))
 
             paid_orders = [order for order in paid_orders if order.cancelled_at is None]
 
             if shop in cod:
                 # Modify the financial_status in params for querying COD orders
                 orders_params['financial_status']='pending'
-                pending_orders = shopify.Order.find(**orders_params)
+                # pending_orders = shopify.Order.find(**orders_params)
+                pending_orders = list(iter_all_orders(orders_params=orders_params))
 
                 pending_orders = [
                     order for order in pending_orders if order.financial_status != "voided"
@@ -131,7 +152,7 @@ def get_data(start_date=None, end_date=None):
     end = time()
 
     output = {
-        "total_unfulfilled_orders": len(sku_sum),
+        # "total_unfulfilled_skus": len(sku_sum),
         "products": [
             {"sku": sku, "quantity": quantity} for sku, quantity in sku_sum.items()
         ],
