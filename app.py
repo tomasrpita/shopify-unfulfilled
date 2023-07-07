@@ -10,9 +10,6 @@ load_dotenv()
 
 shops = ["ES", "FR", "IT", "NL"]
 
-# "Cash on Delivery" (COD)
-# cod = ["ES", "IT"]
-
 def iter_all_orders(orders_params):
     """
     This function iterates over all the orders in the shopify store.
@@ -33,14 +30,10 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     created_at_min = ""
     created_at_max = ""
   
+    # Format the dates to ISO 8601
     if start_date:
-        # Format that Shopify expects
         created_at_min = start_date.isoformat()
-    
     if end_date:
-        # The Shopify API treats upper limit as exclusive, 
-        # so we add one day to make it inclusive.
-        end_date = end_date + timedelta(days=1)
         created_at_max = end_date.isoformat()
 
     sku_by_country_counts = {}
@@ -63,19 +56,12 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
         }
 
         try:
-
-            # The common_params will be used for querying both paid and pending orders.
-            # paid_orders = shopify.Order.find(**orders_params)
-            
             paid_orders = list(iter_all_orders(orders_params=orders_params))
             
             paid_orders = [order for order in paid_orders if order.cancelled_at is None]
 
             avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
             avoid_financial_status = ["voided", "refunded", "partially_refunded"]
-
-            # allowed_financial_status = ["paid", "partially_paid", "authorized", "pending"]
-            
 
             paid_orders = [
                 order
@@ -88,28 +74,6 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
                 for order in paid_orders
                 if order.financial_status not in avoid_financial_status
             ]
-
-            # if shop in cod:
-            #     # Modify the financial_status in params for querying COD orders
-            #     orders_params['financial_status']='pending'
-            #     # pending_orders = shopify.Order.find(**orders_params)
-            #     pending_orders = list(iter_all_orders(orders_params=orders_params))
-
-            #     pending_orders = [
-            #         order for order in pending_orders if order.financial_status != "voided"
-            #     ]
-
-            #     pending_orders = [
-            #         order for order in pending_orders if order.cancelled_at is None
-            #     ]
-
-            #     cod_orders = [
-            #         order for order in pending_orders if "COD" in order.tags.split(", ")
-            #     ]
-
-            #     orders = paid_orders + cod_orders
-            # else:
-            #     orders = paid_orders
 
             orders = paid_orders
 
