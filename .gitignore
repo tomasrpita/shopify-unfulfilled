@@ -141,3 +141,5 @@ tmp/
 
 # Excel temporal
 *~$*.xlsx
+
+*dont*

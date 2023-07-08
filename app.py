@@ -8,7 +8,8 @@ from flask import Flask, request
 
 load_dotenv()
 
-shops = ["ES", "FR", "IT", "NL"]
+# shops = ["ES", "FR", "IT", "NL"]
+shops = ["ES"]
 
 def iter_all_orders(orders_params):
     """
@@ -39,6 +40,7 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     sku_by_country_counts = {}
 
     for shop in shops:
+        print(f"Getting data for {shop}")
         API_KEY = os.getenv(f"API_KEY_{shop}")
         PASSWORD = os.getenv(f"PASSWORD_{shop}")
         SHOP_NAME = os.getenv(f"SHOP_{shop}")
@@ -90,6 +92,7 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
 
         sku_by_country_counts[shop] = sku_counts
 
+    print("Done")
     return sku_by_country_counts
 
 
@@ -169,6 +172,8 @@ def shopify_unfilfilled_sku():
 
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
+
+        print(start_date, end_date)
 
     except ValueError as e:
         return {"error": str(e)}, 400
