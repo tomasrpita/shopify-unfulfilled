@@ -1,9 +1,8 @@
+import multiprocessing
 import os
 from datetime import datetime, timedelta
-import multiprocessing
 from time import time
 
-import shopify
 from dotenv import load_dotenv
 from flask import Flask, request
 
@@ -30,17 +29,6 @@ def filter_orders(orders, avoid_status, status_type):
     ]
 
 
-def iter_all_orders(orders_params):
-    orders = shopify.Order.find(**orders_params)
-    for order in orders:
-        yield order
-
-    while orders.has_next_page():
-        orders = orders.next_page()
-        for order in orders:
-            yield order
-
-
 def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     created_at_min, created_at_max = format_dates(start_date, end_date)
 
@@ -52,16 +40,19 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
 
     sku_by_country_counts = {}
 
-    for shop in shops:
-        sku_counts = process_shop(orders_params, shop)
-        sku_by_country_counts[shop] = sku_counts
+    with multiprocessing.Pool() as pool:
+        sku_by_country_counts = dict(
+            pool.starmap(process_shop, [(orders_params, shop) for shop in shops])
+        )
 
-    print("Done")
+    # print("Done")
     return sku_by_country_counts
 
 
 def process_shop(orders_params, shop):
-    print(f"Getting data for {shop}")
+    import shopify
+
+    # print(f"Getting data for {shop}")
     API_KEY = os.getenv(f"API_KEY_{shop}")
     PASSWORD = os.getenv(f"PASSWORD_{shop}")
     SHOP_NAME = os.getenv(f"SHOP_{shop}")
@@ -70,6 +61,17 @@ def process_shop(orders_params, shop):
     shopify.ShopifyResource.set_site(shop_url)
 
     try:
+
+        def iter_all_orders(orders_params):
+            orders = shopify.Order.find(**orders_params)
+            for order in orders:
+                yield order
+
+            while orders.has_next_page():
+                orders = orders.next_page()
+                for order in orders:
+                    yield order
+
         orders = list(iter_all_orders(orders_params=orders_params))
 
         orders = [order for order in orders if order.cancelled_at is None]
@@ -87,10 +89,12 @@ def process_shop(orders_params, shop):
                     sku_counts[line_item.sku] = (
                         sku_counts.get(line_item.sku, 0) + line_item.quantity
                     )
-        return sku_counts
+
+        shopify.ShopifyResource.clear_session()
+        return (shop, sku_counts)
 
     except Exception as e:
-        sku_counts = {"error": e}
+        return (shop, {"error": e})
 
 
 def adjust_end_date(end_date):
@@ -170,7 +174,7 @@ def shopify_unfilfilled_sku():
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
-        print(start_date, end_date)
+        # print(start_date, end_date)
 
     except ValueError as e:
         return {"error": str(e)}, 400
