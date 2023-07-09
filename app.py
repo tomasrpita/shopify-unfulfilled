@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 from datetime import datetime, timedelta
@@ -5,6 +6,31 @@ from time import time
 
 from dotenv import load_dotenv
 from flask import Flask, request
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create handlers
+c_handler = logging.StreamHandler()
+f_handler = logging.FileHandler('app.log')
+c_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.WARNING)
+
+# create formatter
+formatter = logging.Formatter(
+    "[%(asctime)s.%(msecs)d] %(levelname)s \t[%(name)s.%(module)s.%(funcName)s:%(lineno)d] \t%(message)s",
+    datefmt="%d/%m/%Y %H:%M:%S",
+)
+
+# add formatter to handler
+c_handler.setFormatter(formatter)
+f_handler.setFormatter(formatter)
+
+# add handler to logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
 
 load_dotenv()
 
@@ -52,7 +78,7 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
 def process_shop(orders_params, shop):
     import shopify
 
-    # print(f"Getting data for {shop}")
+    logger.info(f"Getting data for {shop}")
     API_KEY = os.getenv(f"API_KEY_{shop}")
     PASSWORD = os.getenv(f"PASSWORD_{shop}")
     SHOP_NAME = os.getenv(f"SHOP_{shop}")
@@ -158,6 +184,7 @@ app = Flask(__name__)
 
 @app.errorhandler(500)
 def handle_500(e):
+    logger.error(f"Error: {e}")
     return {"error": str(e)}, 500
 
 
@@ -174,10 +201,11 @@ def shopify_unfilfilled_sku():
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
-        # print(start_date, end_date)
+        logger.info(f"Getting data from {start_date} to {end_date}")
 
     except ValueError as e:
-        return {"error": str(e)}, 400
+        logger.error(f"Error parsing dates: {e}")
+        return {f"error: Error parsing dates: {e}"}, 400
 
     data = get_data(start_date=start_date, end_date=end_date)
 
@@ -186,4 +214,14 @@ def shopify_unfilfilled_sku():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5666)
+    # app.run(debug=True, port=5666)
+
+    from tornado.httpserver import HTTPServer
+    from tornado.ioloop import IOLoop
+    from tornado.wsgi import WSGIContainer
+
+    http_server = HTTPServer(WSGIContainer(app))
+    http_server.bind(5666)
+    http_server.start(3)
+    logger.info("Server started")
+    IOLoop.current().start()

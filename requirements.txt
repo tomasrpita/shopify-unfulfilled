@@ -54,5 +54,7 @@ six==1.16.0
     # via
     #   pyactiveresource
     #   shopifyapi
+tornado==6.3.2
+    # via -r requirements.in
 werkzeug==2.3.6
     # via flask
