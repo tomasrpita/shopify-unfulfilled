@@ -1,0 +1,30 @@
+mutation bulkOperationRunQuery(
+              query "{
+                orders(first: 1, query:"cancelled_at:NULL AND NOT fulfillment_status:fulfilled AND NOT fulfillment_status:partial AND NOT fulfillment_status:restocked AND NOT financial_status:voided AND NOT financial_status:refunded AND NOT financial_status:partially_refunded") {
+                  edges {
+                    node {
+                      id
+                      lineItems(first: 1) {
+                        edges {
+                          node {
+                            sku
+                            quantity
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ",
+            ) {
+              bulkOperation {
+                id
+                status
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+        

@@ -1,8 +1,9 @@
 import logging
 import multiprocessing
+import requests
 import os
 from datetime import datetime, timedelta
-from time import time
+from time import time, sleep
 
 from dotenv import load_dotenv
 from flask import Flask, request
@@ -34,7 +35,8 @@ logger.addHandler(f_handler)
 
 load_dotenv()
 
-shops = ["ES", "FR", "IT", "NL"]
+# shops = ["ES", "FR", "IT", "NL"]
+shops = ["ES"]
 
 
 def format_dates(start_date=None, end_date=None):
@@ -82,31 +84,136 @@ def process_shop(orders_params, shop):
     API_KEY = os.getenv(f"API_KEY_{shop}")
     PASSWORD = os.getenv(f"PASSWORD_{shop}")
     SHOP_NAME = os.getenv(f"SHOP_{shop}")
-    shop_url = f"https://{API_KEY}:{PASSWORD}@{SHOP_NAME}.myshopify.com/admin"
+    version = os.getenv("API_VERSION")
+    # shop_url = f"https://{API_KEY}:{PASSWORD}@{SHOP_NAME}.myshopify.com/admin"
+    shop_url = f"https://{API_KEY}:{PASSWORD}@{SHOP_NAME}.myshopify.com/admin/api/{version}/graphql.json"
 
-    shopify.ShopifyResource.set_site(shop_url)
+
+    # shopify.ShopifyResource.set_site(shop_url)
 
     try:
 
         def iter_all_orders(orders_params):
-            orders = shopify.Order.find(**orders_params)
-            for order in orders:
-                yield order
+            query = """
+            query {
+              orders(first: 25, query:"cancelled_at:NULL AND NOT fulfillment_status:fulfilled AND NOT fulfillment_status:partial AND NOT fulfillment_status:restocked AND NOT financial_status:voided AND NOT financial_status:refunded AND NOT financial_status:partially_refunded") {
+                edges {
+                  node {
+                    lineItems(first: 50) {
+                      edges {
+                        node {
+                          sku
+                          quantity
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+            payload = {"query": query}
+            response = requests.post(shop_url, json=payload)
+            data = response.json()
+            for order in data["data"]["orders"]["edges"][0]["node"]["lineItems"]["edges"]:
+                yield order["node"]
 
-            while orders.has_next_page():
-                orders = orders.next_page()
-                for order in orders:
-                    yield order
+        # def iter_all_orders(orders_params):
+        #     # query:cancelled_at:NULL AND NOT fulfillment_status:fulfilled AND NOT fulfillment_status:partial AND NOT fulfillment_status:restocked AND NOT financial_status:voided AND NOT financial_status:refunded AND NOT financial_status:partially_refunded
+        #     query = """
+        #         mutation {
+        #           bulkOperationRunQuery(
+        #             query: "
+        #             {
+        #               orders(first: 1, query:'cancelled_at:NULL AND NOT fulfillment_status:fulfilled AND NOT fulfillment_status:partial AND NOT fulfillment_status:restocked AND NOT financial_status:voided AND NOT financial_status:refunded AND NOT financial_status:partially_refunded') {
+        #                 edges {
+        #                   node {
+        #                     id
+        #                     lineItems(first: 1) {
+        #                       edges {
+        #                         node {
+        #                           sku
+        #                           quantity
+        #                         }
+        #                       }
+        #                     }
+        #                   }
+        #                 }
+        #               }
+        #             }
+        #             " 
+        #           ) {
+        #             bulkOperation {
+        #               id
+        #               status
+        #             }
+        #             userErrors {
+        #               field
+        #               message
+        #             }
+        #           }
+        #         }
+        #         """
+        #     # with open('query.graphql', 'r') as file:
+        #     #     query = file.read().replace('\n', '')
+        #     payload = {"query": query}
+        #     response = requests.post(shop_url, json=payload)
+        #     data = response.json()
+
+        #     query = """
+        #          {
+        #           currentBulkOperation {
+        #             id
+        #             status
+        #             errorCode
+        #             createdAt
+        #             completedAt
+        #             objectCount
+        #             fileSize
+        #             url
+        #             partialDataUrl
+        #           }
+        #         }
+        #         """
+            
+        #     # payload = {"query": query}
+        #     # response = requests.post(shop_url, json=payload)
+
+        #     def wait_for_bulk_operation_to_finish():
+        #         status = None
+        #         while status != 'COMPLETED':
+        #             query = """
+        #             {
+        #               currentBulkOperation {
+        #                 status
+        #               }
+        #             }
+        #             """
+        #             payload = {"query": query}
+        #             response = requests.post(shop_url, json=payload)
+        #             status = response.json()["data"]["currentBulkOperation"]["status"]
+        #             logger.info(f"Current status: {status}")
+        #             sleep(10)
+
+        #     wait_for_bulk_operation_to_finish()
+
+        #     import urllib
+        #     data_url = response.json()["data"]["currentBulkOperation"]["url"]
+        #     data = urllib.request.urlopen(data_url).read()
+
+        #     data = json.loads(data)
+
+
 
         orders = list(iter_all_orders(orders_params=orders_params))
 
-        orders = [order for order in orders if order.cancelled_at is None]
+        # orders = [order for order in orders if order.cancelled_at is None]
 
-        avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
-        avoid_financial_status = ["voided", "refunded", "partially_refunded"]
+        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
+        # avoid_financial_status = ["voided", "refunded", "partially_refunded"]
 
-        orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
-        orders = filter_orders(orders, avoid_financial_status, "financial_status")
+        # orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
+        # orders = filter_orders(orders, avoid_financial_status, "financial_status")
 
         sku_counts = {}
         for order in orders:
@@ -116,7 +223,7 @@ def process_shop(orders_params, shop):
                         sku_counts.get(line_item.sku, 0) + line_item.quantity
                     )
 
-        shopify.ShopifyResource.clear_session()
+        # shopify.ShopifyResource.clear_session()
         return (shop, sku_counts)
 
     except Exception as e:
@@ -193,8 +300,6 @@ def shopify_unfilfilled_sku():
     # Get the data and try to convert the start_date and end_date to datetime objects
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
-    
-    logger.info(f"Getting data from {start_date} to {end_date}")
 
     try:
         if start_date:
@@ -203,6 +308,7 @@ def shopify_unfilfilled_sku():
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
+        logger.info(f"Getting data from {start_date} to {end_date}")
 
     except ValueError as e:
         logger.error(f"Error parsing dates: {e}")
