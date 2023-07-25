@@ -61,6 +61,8 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     orders_params = {
         "created_at_min": created_at_min,
         "created_at_max": created_at_max,
+        # "cancelled_at" : None, <-- i don't shure if this works
+        "fulfillment_status": "unfulfilled",
         "limit": 250,
     }
 
@@ -100,12 +102,13 @@ def process_shop(orders_params, shop):
 
         orders = list(iter_all_orders(orders_params=orders_params))
 
-        orders = [order for order in orders if order.cancelled_at is None]
-
-        avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
+        orders = [order for order in orders if not order.cancelled_at]
+        
+        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
         avoid_financial_status = ["voided", "refunded", "partially_refunded"]
 
-        orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
+        # orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
+        
         orders = filter_orders(orders, avoid_financial_status, "financial_status")
 
         sku_counts = {}
