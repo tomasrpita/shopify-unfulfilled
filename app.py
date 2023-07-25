@@ -226,6 +226,6 @@ if __name__ == "__main__":
 
     http_server = HTTPServer(WSGIContainer(app))
     http_server.bind(5666)
-    http_server.start(3)
+    http_server.start()
     logger.info("Server started")
     IOLoop.current().start()
