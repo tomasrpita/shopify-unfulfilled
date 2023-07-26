@@ -1,8 +1,9 @@
 import logging
-import multiprocessing
+# import multiprocessing
 import os
 from datetime import datetime, timedelta
 from time import time
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 from flask import Flask, request
@@ -58,6 +59,27 @@ def filter_orders(orders, avoid_status, status_type):
     ]
 
 
+# def get_unfulfilled_products_by_country(start_date=None, end_date=None):
+#     created_at_min, created_at_max = format_dates(start_date, end_date)
+
+#     orders_params = {
+#         "created_at_min": created_at_min,
+#         "created_at_max": created_at_max,
+#         # "cancelled_at" : None, <-- i don't shure if this works
+#         "fulfillment_status": "unfulfilled",
+#         "limit": 250,
+#     }
+
+#     sku_by_country_counts = {}
+
+#     with multiprocessing.Pool() as pool:
+#         sku_by_country_counts = dict(
+#             pool.starmap(process_shop, [(orders_params, shop) for shop in shops])
+#         )
+
+#     logger.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
+#     return sku_by_country_counts
+
 def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     created_at_min, created_at_max = format_dates(start_date, end_date)
 
@@ -71,10 +93,9 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
 
     sku_by_country_counts = {}
 
-    with multiprocessing.Pool() as pool:
-        sku_by_country_counts = dict(
-            pool.starmap(process_shop, [(orders_params, shop) for shop in shops])
-        )
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_shop, orders_params, shop) for shop in shops]
+        sku_by_country_counts = {future.result()[0]: future.result()[1] for future in futures}
 
     logger.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
     return sku_by_country_counts
