@@ -180,7 +180,7 @@ def get_data(start_date=None, end_date=None):
         "start_date": start_date.strftime("%d-%m-%Y %H:%M:%S") if start_date else "",
         "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
     }
-    logger.info(F"Data retruieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    logger.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
     return output
 
 
