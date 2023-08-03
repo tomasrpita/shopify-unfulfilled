@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 from flask import Flask, request
 
 # Create logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 # Create handlers
 c_handler = logging.StreamHandler()
@@ -28,8 +28,8 @@ c_handler.setFormatter(formatter)
 f_handler.setFormatter(formatter)
 
 # add handler to logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
+log.addHandler(c_handler)
+log.addHandler(f_handler)
 
 
 load_dotenv()
@@ -76,14 +76,14 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
             pool.starmap(process_shop, [(orders_params, shop) for shop in shops])
         )
 
-    logger.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
+    log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
     return sku_by_country_counts
 
 
 def process_shop(orders_params, shop):
     import shopify
 
-    logger.info(f"Getting data for {shop}")
+    log.info(f"Getting data for {shop}")
     API_KEY = os.getenv(f"API_KEY_{shop}")
     PASSWORD = os.getenv(f"PASSWORD_{shop}")
     SHOP_NAME = os.getenv(f"SHOP_{shop}")
@@ -107,11 +107,11 @@ def process_shop(orders_params, shop):
 
         orders = [order for order in orders if not order.cancelled_at]
         
-        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
-        avoid_financial_status = ["voided", "refunded", "partially_refunded"]
 
+        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
         # orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
         
+        avoid_financial_status = ["voided", "refunded", "partially_refunded"]
         orders = filter_orders(orders, avoid_financial_status, "financial_status")
 
         sku_counts = {}
@@ -180,7 +180,7 @@ def get_data(start_date=None, end_date=None):
         "start_date": start_date.strftime("%d-%m-%Y %H:%M:%S") if start_date else "",
         "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
     }
-    logger.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
     return output
 
 
@@ -190,7 +190,7 @@ app = Flask(__name__)
 
 @app.errorhandler(500)
 def handle_500(e):
-    logger.error(f"Error: {e}")
+    log.error(f"Error: {e}")
     return {"error": str(e)}, 500
 
 
@@ -200,7 +200,7 @@ def shopify_unfilfilled_sku():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
     
-    logger.info(f"Getting data from {start_date} to {end_date}")
+    log.info(f"Getting data from {start_date} to {end_date}")
 
     try:
         if start_date:
@@ -211,7 +211,7 @@ def shopify_unfilfilled_sku():
 
 
     except ValueError as e:
-        logger.error(f"Error parsing dates: {e}")
+        log.error(f"Error parsing dates: {e}")
         return {f"error: Error parsing dates: {e}"}, 400
 
     data = get_data(start_date=start_date, end_date=end_date)
@@ -230,5 +230,5 @@ if __name__ == "__main__":
     http_server = HTTPServer(WSGIContainer(app))
     http_server.bind(5666)
     http_server.start()
-    logger.info("Server started")
+    log.info("Server started")
     IOLoop.current().start()
