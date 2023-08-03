@@ -117,10 +117,12 @@ def process_shop(orders_params, shop, proccess_orders_func):
         orders = [order for order in orders if not order.name.startswith("#FI")]
 
         orders = [order for order in orders if not order.cancelled_at]
+
+        # orders = [order for order in orders if order.status == "open"]
         
 
-        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
-        # orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
+        avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
+        orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
         
         avoid_financial_status = ["voided", "refunded", "partially_refunded"]
         orders = filter_orders(orders, avoid_financial_status, "financial_status")
@@ -150,7 +152,8 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None, processi
     orders_params = {
         "created_at_min": created_at_min,
         "created_at_max": created_at_max,
-        "fulfillment_status": "unfulfilled",
+        "status": "open",
+        # "fulfillment_status": "unfulfilled", # TODO: check if works
         "limit": 250,
     }
 
