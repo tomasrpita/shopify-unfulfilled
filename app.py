@@ -34,9 +34,10 @@ log.addHandler(f_handler)
 
 load_dotenv()
 
+# shops = ["ES"]
 # shops = ["ES", "FR", "IT", "NL"]
-shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
-# shops = ["DE", "EU", "PT",  "UK"]
+# shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
+shops = ["DE", "EU", "PT",  "UK"]
 
 
 
@@ -79,7 +80,81 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None):
     log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
     return sku_by_country_counts
 
+def get_unfulfilled_products_by_country2(start_date=None, end_date=None):
+    created_at_min, created_at_max = format_dates(start_date, end_date)
 
+    orders_params = {
+        "created_at_min": created_at_min,
+        "created_at_max": created_at_max,
+        # "cancelled_at" : None, <-- i don't shure if this works
+        "fulfillment_status": "unfulfilled",
+        "limit": 250,
+    }
+
+    sku_by_country_counts = {}
+
+    with multiprocessing.Pool() as pool:
+        sku_by_country_counts = dict(
+            pool.starmap(process_shop2, [(orders_params, shop) for shop in shops])
+        )
+
+    log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
+    return sku_by_country_counts
+
+
+def process_shop2(orders_params, shop):
+    import shopify
+
+    log.info(f"Getting data for {shop}")
+    API_KEY = os.getenv(f"API_KEY_{shop}")
+    PASSWORD = os.getenv(f"PASSWORD_{shop}")
+    SHOP_NAME = os.getenv(f"SHOP_{shop}")
+    shop_url = f"https://{API_KEY}:{PASSWORD}@{SHOP_NAME}.myshopify.com/admin"
+
+    shopify.ShopifyResource.set_site(shop_url)
+
+    try:
+
+        def iter_all_orders(orders_params):
+            orders = shopify.Order.find(**orders_params)
+            for order in orders:
+                yield order
+
+            while orders.has_next_page():
+                orders = orders.next_page()
+                for order in orders:
+                    yield order
+
+        orders = list(iter_all_orders(orders_params=orders_params))
+
+        orders = [order for order in orders if not order.cancelled_at]
+        
+
+        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
+        # orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
+        
+        avoid_financial_status = ["voided", "refunded", "partially_refunded"]
+        orders = filter_orders(orders, avoid_financial_status, "financial_status")
+
+        order_skus = []
+        for order in orders:
+            order_data = {
+                "name": order.name,
+                "processed_at": order.processed_at,
+            }
+            for line_item in order.line_items:
+                order_line_item = order_data.copy()
+                if line_item.sku and line_item.sku.startswith("DIVAIN"):
+                    order_line_item["sku"] = line_item.sku
+                    order_line_item["quantity"] = line_item.quantity
+                    order_skus.append(order_line_item)
+
+        shopify.ShopifyResource.clear_session()
+        return (shop, order_skus)
+
+    except Exception as e:
+        return (shop, {"error": e})
+    
 def process_shop(orders_params, shop):
     import shopify
 
@@ -129,6 +204,7 @@ def process_shop(orders_params, shop):
         return (shop, {"error": e})
 
 
+
 def adjust_end_date(end_date):
     today = datetime.now()
     if end_date and end_date.date() == today.date():
@@ -162,6 +238,24 @@ def get_unfulfilled_products(start_date=None, end_date=None):
                 sku_sum[sku] = sku_count[sku]
     return errors, sku_sum
 
+def get_unfulfilled_products2(start_date=None, end_date=None):
+    sku_by_country_counts = get_unfulfilled_products_by_country2(start_date, end_date)
+
+    errors = [
+        sku_by_country_counts[shop]["error"]
+        for shop in shops
+        if "error" in sku_by_country_counts[shop]
+    ]
+    
+    # one flat list if "error" not in shop
+    skus_by_order = []
+    for shop in shops:
+        if "error" not in sku_by_country_counts[shop]:
+            skus_by_order.extend(sku_by_country_counts[shop])
+
+
+    return errors, skus_by_order
+
 
 def get_data(start_date=None, end_date=None):
     start = time()
@@ -179,10 +273,30 @@ def get_data(start_date=None, end_date=None):
         "time_elapsed": f"{end - start} seconds",
         "start_date": start_date.strftime("%d-%m-%Y %H:%M:%S") if start_date else "",
         "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
+        "shops": shops,
     }
     log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
     return output
 
+
+def get_data2(start_date=None, end_date=None):
+    start = time()
+
+    end_date = adjust_end_date(end_date)
+
+    errors, skus_by_order = get_unfulfilled_products2(start_date=start_date, end_date=end_date)
+    end = time()
+
+    output = {
+        "skus_by_order": skus_by_order,
+        "errors": errors,
+        "time_elapsed": f"{end - start} seconds",
+        "start_date": start_date.strftime("%d-%m-%Y %H:%M:%S") if start_date else "",
+        "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
+        "shops": shops,
+    }
+    log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    return output
 
 # Path: app.py
 app = Flask(__name__)
@@ -215,6 +329,31 @@ def shopify_unfilfilled_sku():
         return {f"error: Error parsing dates: {e}"}, 400
 
     data = get_data(start_date=start_date, end_date=end_date)
+
+    # Return the data as JSON
+    return data
+
+@app.route("/shopify/unfulfilled/skus-by-order", methods=["GET"])
+def shopify_unfilfilled_orders_skus():
+    # Get the data and try to convert the start_date and end_date to datetime objects
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    
+    log.info(f"Getting data from {start_date} to {end_date}")
+
+    try:
+        if start_date:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
+
+        if end_date:
+            end_date = datetime.strptime(end_date, "%Y-%m-%d")
+
+
+    except ValueError as e:
+        log.error(f"Error parsing dates: {e}")
+        return {f"error: Error parsing dates: {e}"}, 400
+
+    data = get_data2(start_date=start_date, end_date=end_date)
 
     # Return the data as JSON
     return data
