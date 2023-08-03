@@ -36,8 +36,8 @@ load_dotenv()
 
 # shops = ["ES"]
 # shops = ["ES", "FR", "IT", "NL"]
-# shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
-shops = ["DE", "EU", "PT",  "UK"]
+shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
+# shops = ["DE", "EU", "PT",  "UK"]
 
 
 
