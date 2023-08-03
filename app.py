@@ -67,7 +67,7 @@ def _get_order_skus(orders):
         }
         for line_item in order.line_items:
             order_line_item = order_data.copy()
-            if line_item.sku and line_item.sku.startswith("DIVAIN"):
+            if line_item.sku and line_item.sku.startswith("DIVAIN") and line_item.sku != "DIVAIN-CAT":
                 order_line_item["sku"] = line_item.sku
                 order_line_item["quantity"] = line_item.quantity
                 order_skus.append(order_line_item)
@@ -110,6 +110,11 @@ def process_shop(orders_params, shop, proccess_orders_func):
                     yield order
 
         orders = list(iter_all_orders(orders_params=orders_params))
+
+        # TODO: upgrede this if shop is Fr remove order name start with "#FI" and
+        # if shop == "FR":
+        #     orders = [order for order in orders if not order.name.startswith("#FI")]
+        orders = [order for order in orders if not order.name.startswith("#FI")]
 
         orders = [order for order in orders if not order.cancelled_at]
         
@@ -241,9 +246,6 @@ def get_data2(start_date=None, end_date=None):
     }
     log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
     return output
-
-
-
 
 # Path: app.py
 app = Flask(__name__)
