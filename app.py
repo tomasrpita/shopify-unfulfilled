@@ -58,104 +58,35 @@ def filter_orders(orders, avoid_status, status_type):
         order for order in orders if getattr(order, status_type) not in avoid_status
     ]
 
-
-def get_unfulfilled_products_by_country(start_date=None, end_date=None):
-    created_at_min, created_at_max = format_dates(start_date, end_date)
-
-    orders_params = {
-        "created_at_min": created_at_min,
-        "created_at_max": created_at_max,
-        # "cancelled_at" : None, <-- i don't shure if this works
-        "fulfillment_status": "unfulfilled",
-        "limit": 250,
-    }
-
-    sku_by_country_counts = {}
-
-    with multiprocessing.Pool() as pool:
-        sku_by_country_counts = dict(
-            pool.starmap(process_shop, [(orders_params, shop) for shop in shops])
-        )
-
-    log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
-    return sku_by_country_counts
-
-def get_unfulfilled_products_by_country2(start_date=None, end_date=None):
-    created_at_min, created_at_max = format_dates(start_date, end_date)
-
-    orders_params = {
-        "created_at_min": created_at_min,
-        "created_at_max": created_at_max,
-        # "cancelled_at" : None, <-- i don't shure if this works
-        "fulfillment_status": "unfulfilled",
-        "limit": 250,
-    }
-
-    sku_by_country_counts = {}
-
-    with multiprocessing.Pool() as pool:
-        sku_by_country_counts = dict(
-            pool.starmap(process_shop2, [(orders_params, shop) for shop in shops])
-        )
-
-    log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
-    return sku_by_country_counts
+def _get_order_skus(orders):
+    order_skus = []
+    for order in orders:
+        order_data = {
+            "name": order.name,
+            "processed_at": order.processed_at,
+        }
+        for line_item in order.line_items:
+            order_line_item = order_data.copy()
+            if line_item.sku and line_item.sku.startswith("DIVAIN"):
+                order_line_item["sku"] = line_item.sku
+                order_line_item["quantity"] = line_item.quantity
+                order_skus.append(order_line_item)
+    return order_skus
 
 
-def process_shop2(orders_params, shop):
-    import shopify
-
-    log.info(f"Getting data for {shop}")
-    API_KEY = os.getenv(f"API_KEY_{shop}")
-    PASSWORD = os.getenv(f"PASSWORD_{shop}")
-    SHOP_NAME = os.getenv(f"SHOP_{shop}")
-    shop_url = f"https://{API_KEY}:{PASSWORD}@{SHOP_NAME}.myshopify.com/admin"
-
-    shopify.ShopifyResource.set_site(shop_url)
-
-    try:
-
-        def iter_all_orders(orders_params):
-            orders = shopify.Order.find(**orders_params)
-            for order in orders:
-                yield order
-
-            while orders.has_next_page():
-                orders = orders.next_page()
-                for order in orders:
-                    yield order
-
-        orders = list(iter_all_orders(orders_params=orders_params))
-
-        orders = [order for order in orders if not order.cancelled_at]
-        
-
-        # avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
-        # orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
-        
-        avoid_financial_status = ["voided", "refunded", "partially_refunded"]
-        orders = filter_orders(orders, avoid_financial_status, "financial_status")
-
-        order_skus = []
-        for order in orders:
-            order_data = {
-                "name": order.name,
-                "processed_at": order.processed_at,
-            }
-            for line_item in order.line_items:
-                order_line_item = order_data.copy()
-                if line_item.sku and line_item.sku.startswith("DIVAIN"):
-                    order_line_item["sku"] = line_item.sku
-                    order_line_item["quantity"] = line_item.quantity
-                    order_skus.append(order_line_item)
-
-        shopify.ShopifyResource.clear_session()
-        return (shop, order_skus)
-
-    except Exception as e:
-        return (shop, {"error": e})
+def _get_sku_counts(orders):
+    sku_counts = {}
+    for order in orders:
+        for line_item in order.line_items:
+            if line_item.sku and line_item.sku.startswith("DIVAIN"):
+                sku_counts[line_item.sku] = (
+                    sku_counts.get(line_item.sku, 0) + line_item.quantity
+                )
+    return sku_counts
     
-def process_shop(orders_params, shop):
+
+    
+def process_shop(orders_params, shop, proccess_orders_func):
     import shopify
 
     log.info(f"Getting data for {shop}")
@@ -189,16 +120,10 @@ def process_shop(orders_params, shop):
         avoid_financial_status = ["voided", "refunded", "partially_refunded"]
         orders = filter_orders(orders, avoid_financial_status, "financial_status")
 
-        sku_counts = {}
-        for order in orders:
-            for line_item in order.line_items:
-                if line_item.sku and line_item.sku.startswith("DIVAIN"):
-                    sku_counts[line_item.sku] = (
-                        sku_counts.get(line_item.sku, 0) + line_item.quantity
-                    )
+        result = proccess_orders_func(orders)
 
         shopify.ShopifyResource.clear_session()
-        return (shop, sku_counts)
+        return (shop, result)
 
     except Exception as e:
         return (shop, {"error": e})
@@ -214,9 +139,28 @@ def adjust_end_date(end_date):
 
     return end_date or today
 
+def get_unfulfilled_products_by_country(start_date=None, end_date=None, processing_function=None):
+    created_at_min, created_at_max = format_dates(start_date, end_date)
+
+    orders_params = {
+        "created_at_min": created_at_min,
+        "created_at_max": created_at_max,
+        "fulfillment_status": "unfulfilled",
+        "limit": 250,
+    }
+
+    sku_by_country_counts = {}
+
+    with multiprocessing.Pool() as pool:
+        sku_by_country_counts = dict(
+            pool.starmap(process_shop, [(orders_params, shop, processing_function) for shop in shops])
+        )
+
+    log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
+    return sku_by_country_counts
 
 def get_unfulfilled_products(start_date=None, end_date=None):
-    sku_by_country_counts = get_unfulfilled_products_by_country(start_date, end_date)
+    sku_by_country_counts = get_unfulfilled_products_by_country(start_date, end_date, _get_sku_counts)
 
     errors = [
         sku_by_country_counts[shop]["error"]
@@ -239,7 +183,7 @@ def get_unfulfilled_products(start_date=None, end_date=None):
     return errors, sku_sum
 
 def get_unfulfilled_products2(start_date=None, end_date=None):
-    sku_by_country_counts = get_unfulfilled_products_by_country2(start_date, end_date)
+    sku_by_country_counts = get_unfulfilled_products_by_country(start_date, end_date, _get_order_skus)
 
     errors = [
         sku_by_country_counts[shop]["error"]
@@ -298,6 +242,9 @@ def get_data2(start_date=None, end_date=None):
     log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
     return output
 
+
+
+
 # Path: app.py
 app = Flask(__name__)
 
@@ -308,55 +255,34 @@ def handle_500(e):
     return {"error": str(e)}, 500
 
 
-@app.route("/shopify/unfulfilled/sku", methods=["GET"])
-def shopify_unfilfilled_sku():
+def handle_request(processing_function):
     # Get the data and try to convert the start_date and end_date to datetime objects
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
-    
+
     log.info(f"Getting data from {start_date} to {end_date}")
 
     try:
         if start_date:
             start_date = datetime.strptime(start_date, "%Y-%m-%d")
-
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
-
-
     except ValueError as e:
         log.error(f"Error parsing dates: {e}")
         return {f"error: Error parsing dates: {e}"}, 400
 
-    data = get_data(start_date=start_date, end_date=end_date)
+    data = processing_function(start_date=start_date, end_date=end_date)
 
     # Return the data as JSON
     return data
+
+@app.route("/shopify/unfulfilled/sku", methods=["GET"])
+def shopify_unfilfilled_sku():
+    return handle_request(get_data)
 
 @app.route("/shopify/unfulfilled/skus-by-order", methods=["GET"])
 def shopify_unfilfilled_orders_skus():
-    # Get the data and try to convert the start_date and end_date to datetime objects
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    
-    log.info(f"Getting data from {start_date} to {end_date}")
-
-    try:
-        if start_date:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")
-
-        if end_date:
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")
-
-
-    except ValueError as e:
-        log.error(f"Error parsing dates: {e}")
-        return {f"error: Error parsing dates: {e}"}, 400
-
-    data = get_data2(start_date=start_date, end_date=end_date)
-
-    # Return the data as JSON
-    return data
+    return handle_request(get_data2)
 
 
 if __name__ == "__main__":
