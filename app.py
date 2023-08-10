@@ -67,7 +67,7 @@ def _get_order_skus(orders):
         }
         for line_item in order.line_items:
             order_line_item = order_data.copy()
-            if line_item.sku and line_item.sku.startswith("DIVAIN") and line_item.sku != "DIVAIN-CAT":
+            if line_item.sku and (line_item.sku.startswith("DIVAIN") and line_item.sku != "DIVAIN-CAT") or line_item.sku.startswith("HOME"):
                 order_line_item["sku"] = line_item.sku
                 order_line_item["quantity"] = line_item.quantity
                 order_skus.append(order_line_item)
@@ -120,12 +120,18 @@ def process_shop(orders_params, shop, proccess_orders_func):
 
         # orders = [order for order in orders if order.status == "open"]
         
+        # print(len(orders))
 
         avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
         orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
         
         avoid_financial_status = ["voided", "refunded", "partially_refunded"]
         orders = filter_orders(orders, avoid_financial_status, "financial_status")
+
+        # for order in orders:
+        #     print(order.name, order.fulfillment_status, order.financial_status)
+
+        # print(len(orders))
 
         result = proccess_orders_func(orders)
 
