@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 from datetime import datetime, timedelta
+import re
 from time import time
 
 from dotenv import load_dotenv
@@ -58,6 +59,13 @@ def filter_orders(orders, avoid_status, status_type):
         order for order in orders if getattr(order, status_type) not in avoid_status
     ]
 
+def extract_sku(string):
+    match = re.search(r'(DIVAIN-\d+|HOME-\d+)', string)
+    if match:
+        return match.group(0)
+    return None
+
+
 def _get_order_skus(orders):
     order_skus = []
     for order in orders:
@@ -67,10 +75,14 @@ def _get_order_skus(orders):
         }
         for line_item in order.line_items:
             order_line_item = order_data.copy()
-            if line_item.sku and (line_item.sku.startswith("DIVAIN") and line_item.sku != "DIVAIN-CAT") or line_item.sku.startswith("HOME"):
-                order_line_item["sku"] = line_item.sku
+            sku = line_item.sku or extract_sku(line_item.title)
+            if sku and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
+                order_line_item["sku"] = sku
                 order_line_item["quantity"] = line_item.quantity
                 order_skus.append(order_line_item)
+            elif not sku:
+                log.warning(f"Order {order.name} has no sku")
+
     return order_skus
 
 
@@ -78,10 +90,13 @@ def _get_sku_counts(orders):
     sku_counts = {}
     for order in orders:
         for line_item in order.line_items:
-            if line_item.sku and line_item.sku.startswith("DIVAIN"):
-                sku_counts[line_item.sku] = (
-                    sku_counts.get(line_item.sku, 0) + line_item.quantity
+            sku = line_item.sku or extract_sku(line_item.title)
+            if sku and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
+                sku_counts[sku] = (
+                    sku_counts.get(sku, 0) + line_item.quantity
                 )
+            elif not sku:
+                log.warning(f"Order {order.name} has no sku")
     return sku_counts
     
 
@@ -139,7 +154,8 @@ def process_shop(orders_params, shop, proccess_orders_func):
         return (shop, result)
 
     except Exception as e:
-        return (shop, {"error": e})
+        error_message = f"Error getting data for {shop}: {e}"
+        return (shop, {"error": error_message})
 
 
 
