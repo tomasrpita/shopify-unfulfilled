@@ -41,7 +41,7 @@ load_dotenv()
 #  pt is now in EU
 shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
 # shops = ["DE", "EU", "PT",  "UK"]
-
+# shops = ["EU"]
 
 
 def format_dates(start_date=None, end_date=None):
@@ -86,6 +86,29 @@ def _get_order_skus(orders):
                 log.warning(f"Order {order.name} has no sku")
 
     return order_skus
+
+def _get_orders_and_line_items(orders):
+    orders_and_line_items = []
+    for order in orders:
+        order_data = {
+            "name": order.name,
+            "country": order.shipping_address.country,
+            "created_at": datetime.fromisoformat(order.created_at),
+            "line_items": [],
+        }
+        for line_item in order.line_items:
+            order_line_item = order_data.copy()
+            sku = line_item.sku or extract_sku(line_item.title)
+            if sku and sku != "DIVAIN-CAT" and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
+                order_line_item["line_items"].append({
+                    "sku": sku,
+                    "quantity": line_item.quantity,
+                })
+                orders_and_line_items.append(order_line_item)
+            elif not sku:
+                log.warning(f"Order {order.name} has no sku")
+
+    return orders_and_line_items
 
 
 def _get_sku_counts(orders):
@@ -194,11 +217,11 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None, processi
 def get_unfulfilled_products(start_date=None, end_date=None):
     sku_by_country_counts = get_unfulfilled_products_by_country(start_date, end_date, _get_sku_counts)
 
-    errors = [
-        sku_by_country_counts[shop]["error"]
-        for shop in shops
-        if "error" in sku_by_country_counts[shop]
-    ]
+    errors = {}
+    for shop in shops:
+        if "error" in sku_by_country_counts[shop]:
+            errors[shop] = sku_by_country_counts[shop]["error"]
+
     sku_counts = [
         sku_by_country_counts[shop]
         for shop in shops
@@ -231,6 +254,27 @@ def get_unfulfilled_products2(start_date=None, end_date=None):
 
 
     return errors, skus_by_order
+
+def get_unfulfilled_orders_and_line_items(start_date=None, end_date=None):
+    orders_and_line_items = get_unfulfilled_products_by_country(start_date, end_date, _get_orders_and_line_items)
+
+    errors = [
+        orders_and_line_items[shop]["error"]
+        for shop in shops
+        if "error" in orders_and_line_items[shop]
+    ]
+
+    orders_and_line_items = [
+        orders_and_line_items[shop]
+        for shop in shops
+        if "error" not in orders_and_line_items[shop]
+    ]
+
+    # Flatten the list
+    orders_and_line_items = [item for sublist in orders_and_line_items for item in sublist]
+
+    return errors, orders_and_line_items
+
 
 
 def get_data(start_date=None, end_date=None):
@@ -274,6 +318,29 @@ def get_data2(start_date=None, end_date=None):
     log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
     return output
 
+def get_data3(start_date=None, end_date=None):
+    start = time()
+
+    end_date = adjust_end_date(end_date)
+
+    # Esta es la función que necesitaríamos implementar para obtener los pedidos y sus line items.
+    errors, orders_and_line_items = get_unfulfilled_orders_and_line_items(start_date=start_date, end_date=end_date)
+    end = time()
+
+    # Formatear los datos en la estructura deseada.
+    output = {
+        "orders": orders_and_line_items,
+        "errors": errors,
+        "time_elapsed": f"{end - start} seconds",
+        "start_date": start_date.strftime("%d-%m-%Y %H:%M:%S") if start_date else "",
+        "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
+        "shops": shops,
+    }
+    log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    return output
+
+
+
 # Path: app.py
 app = Flask(__name__)
 
@@ -314,6 +381,12 @@ def shopify_unfilfilled_orders_skus():
     return handle_request(get_data2)
 
 
+
+# to fill divain pro ShopifyOrder and ShopifyOrderLineItem
+@app.route("/shopify/unfulfilled/orders_and_line_items", methods=["GET"])
+def shopify_unfilfilled_orders_and_line_items():
+    return handle_request(get_data3)
+
 if __name__ == "__main__":
     # app.run(debug=True, port=5666)
 
@@ -326,3 +399,4 @@ if __name__ == "__main__":
     http_server.start()
     log.info("Server started")
     IOLoop.current().start()
+
