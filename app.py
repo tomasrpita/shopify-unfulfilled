@@ -101,6 +101,7 @@ def _get_orders_and_line_items(orders):
             sku = line_item.sku or extract_sku(line_item.title)
             if sku and sku != "DIVAIN-CAT" and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
                 order_line_item["line_items"].append({
+                    "id": line_item.id,
                     "sku": sku,
                     "quantity": line_item.quantity,
                 })
