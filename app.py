@@ -39,8 +39,8 @@ load_dotenv()
 # shops = ["ES", "FR", "IT", "NL"]
 # shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
 #  pt is now in EU
-# shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
-shops = ["DE", "EU", "PT",  "UK"]
+shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
+# shops = ["DE", "EU", "UK"]
 # shops = ["EU"]
 
 
@@ -70,6 +70,7 @@ def extract_sku(string):
 
 def _get_order_skus(orders):
     order_skus = []
+    sku_pattern = re.compile(r"^(DIVAIN|HOME)-\d{3,4}$")
     for order in orders:
         order_data = {
             "name": order.name,
@@ -78,7 +79,7 @@ def _get_order_skus(orders):
         for line_item in order.line_items:
             order_line_item = order_data.copy()
             sku = line_item.sku or extract_sku(line_item.title)
-            if sku and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
+            if sku and sku_pattern.match(sku):
                 order_line_item["sku"] = sku
                 order_line_item["quantity"] = line_item.quantity
                 order_skus.append(order_line_item)
@@ -89,6 +90,7 @@ def _get_order_skus(orders):
 
 def _get_orders_and_line_items(orders):
     orders_and_line_items = []
+    sku_pattern = re.compile(r"^(DIVAIN|HOME)-\d{3,4}$")
     for order in orders:
         order_data = {
             "name": order.name,
@@ -99,7 +101,7 @@ def _get_orders_and_line_items(orders):
         for line_item in order.line_items:
             order_line_item = order_data.copy()
             sku = line_item.sku or extract_sku(line_item.title)
-            if sku and sku != "DIVAIN-CAT" and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
+            if sku and sku_pattern.match(sku):
                 order_line_item["line_items"].append({
                     "id": line_item.id,
                     "sku": sku,
@@ -114,10 +116,11 @@ def _get_orders_and_line_items(orders):
 
 def _get_sku_counts(orders):
     sku_counts = {}
+    sku_pattern = re.compile(r"^(DIVAIN|HOME)-\d{3,4}$")
     for order in orders:
         for line_item in order.line_items:
             sku = line_item.sku or extract_sku(line_item.title)
-            if sku and (sku.startswith("DIVAIN") or sku.startswith("HOME")):
+            if sku and sku_pattern.match(sku):
                 sku_counts[sku] = (
                     sku_counts.get(sku, 0) + line_item.quantity
                 )
