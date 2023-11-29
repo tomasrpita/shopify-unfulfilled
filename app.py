@@ -39,8 +39,8 @@ load_dotenv()
 # shops = ["ES", "FR", "IT", "NL"]
 # shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
 #  pt is now in EU
-shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
-# shops = ["DE", "EU", "PT",  "UK"]
+# shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
+shops = ["DE", "EU", "PT",  "UK"]
 # shops = ["EU"]
 
 
@@ -364,6 +364,8 @@ def handle_request(processing_function):
             start_date = datetime.strptime(start_date, "%Y-%m-%d")
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
+        else:
+            end_date = datetime.now()
     except ValueError as e:
         log.error(f"Error parsing dates: {e}")
         return {f"error: Error parsing dates: {e}"}, 400
