@@ -386,6 +386,7 @@ def shopify_unfilfilled_orders_skus():
 
 
 # to fill divain pro ShopifyOrder and ShopifyOrderLineItem
+# http://localhost:5666/shopify/unfulfilled/orders_and_line_items?start_date=2023-11-29
 @app.route("/shopify/unfulfilled/orders_and_line_items", methods=["GET"])
 def shopify_unfilfilled_orders_and_line_items():
     return handle_request(get_data3)
