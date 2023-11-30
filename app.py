@@ -35,13 +35,9 @@ log.addHandler(f_handler)
 
 load_dotenv()
 
-# shops = ["ES"]
-# shops = ["ES", "FR", "IT", "NL"]
-# shops = ["ES", "FR", "IT", "NL", "DE", "EU", "PT",  "UK"]
 #  pt is now in EU
 shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
-# shops = ["DE", "EU", "UK"]
-# shops = ["EU"]
+# shops = ["DE"]
 
 
 def format_dates(start_date=None, end_date=None):
@@ -360,7 +356,6 @@ def handle_request(processing_function):
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
-    log.info(f"Getting data from {start_date} to {end_date}")
 
     try:
         if start_date:
@@ -370,9 +365,11 @@ def handle_request(processing_function):
         else:
             end_date = datetime.now()
     except ValueError as e:
-        log.error(f"Error parsing dates: {e}")
-        return {f"error: Error parsing dates: {e}"}, 400
+        error_message = f"Error parsing dates: {e}"
+        log.error(error_message)
+        return {"error": error_message}, 400
 
+    log.info(f"Getting data from {start_date} to {end_date}")
     data = processing_function(start_date=start_date, end_date=end_date)
 
     # Return the data as JSON
