@@ -37,7 +37,7 @@ load_dotenv()
 
 #  pt is now in EU
 # shops = ["ES", "FR", "IT", "NL", "DE", "EU", "UK"]
-shops = ["FR"]
+shops = ["NL"]
 
 
 def format_dates(start_date=None, end_date=None):
@@ -399,12 +399,14 @@ def handle_request(processing_function):
     # Return the data as JSON
     return data
 
-
+# For PEC querys
+# http://localhost:5666/shopify/unfulfilled/sku?start_date=2023-11-29
 @app.route("/shopify/unfulfilled/sku", methods=["GET"])
 def shopify_unfilfilled_sku():
     return handle_request(get_data)
 
-
+# Unused endpoint
+# http://localhost:5666/shopify/unfulfilled/skus-by-order?start_date=2023-11-29
 @app.route("/shopify/unfulfilled/skus-by-order", methods=["GET"])
 def shopify_unfilfilled_orders_skus():
     return handle_request(get_data2)
