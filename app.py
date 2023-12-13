@@ -1,8 +1,8 @@
 import logging
 import multiprocessing
 import os
-from datetime import datetime, timedelta
 import re
+from datetime import datetime, timedelta
 from time import time
 
 from dotenv import load_dotenv
@@ -14,7 +14,7 @@ log.setLevel(logging.INFO)
 
 # Create handlers
 c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler('app.log')
+f_handler = logging.FileHandler("app.log")
 c_handler.setLevel(logging.INFO)
 f_handler.setLevel(logging.WARNING)
 
@@ -36,7 +36,7 @@ log.addHandler(f_handler)
 load_dotenv()
 
 #  pt is now in EU
-shops = ["ES", "FR", "IT", "NL", "DE", "EU",  "UK"]
+shops = ["ES", "FR", "IT", "NL", "DE", "EU", "UK"]
 # shops = ["DE"]
 
 
@@ -57,8 +57,9 @@ def filter_orders(orders, avoid_status, status_type):
         order for order in orders if getattr(order, status_type) not in avoid_status
     ]
 
+
 def extract_sku(string):
-    match = re.search(r'(DIVAIN-\d+|HOME-\d+)', string)
+    match = re.search(r"(DIVAIN-\d+|HOME-\d+)", string)
     if match:
         return match.group(0)
     return None
@@ -84,6 +85,7 @@ def _get_order_skus(orders):
 
     return order_skus
 
+
 def _get_orders_and_line_items(orders):
     orders_and_line_items = []
     sku_pattern = re.compile(r"^(DIVAIN|HOME)-\d{3,4}$")
@@ -98,11 +100,13 @@ def _get_orders_and_line_items(orders):
             order_line_item = order_data.copy()
             sku = line_item.sku or extract_sku(line_item.title)
             if sku and sku_pattern.match(sku):
-                order_line_item["line_items"].append({
-                    "id": line_item.id,
-                    "sku": sku,
-                    "quantity": line_item.quantity,
-                })
+                order_line_item["line_items"].append(
+                    {
+                        "id": line_item.id,
+                        "sku": sku,
+                        "quantity": line_item.quantity,
+                    }
+                )
                 orders_and_line_items.append(order_line_item)
             elif not sku:
                 log.warning(f"Order {order.name} has no sku")
@@ -117,15 +121,12 @@ def _get_sku_counts(orders):
         for line_item in order.line_items:
             sku = line_item.sku or extract_sku(line_item.title)
             if sku and sku_pattern.match(sku):
-                sku_counts[sku] = (
-                    sku_counts.get(sku, 0) + line_item.quantity
-                )
+                sku_counts[sku] = sku_counts.get(sku, 0) + line_item.quantity
             elif not sku:
                 log.warning(f"Order {order.name} has no sku")
     return sku_counts
-    
 
-    
+
 def process_shop(orders_params, shop, proccess_orders_func):
     import shopify
 
@@ -159,12 +160,12 @@ def process_shop(orders_params, shop, proccess_orders_func):
         orders = [order for order in orders if not order.cancelled_at]
 
         # orders = [order for order in orders if order.status == "open"]
-        
+
         # print(len(orders))
 
         avoid_fullfilled_status = ["fulfilled", "partial", "restocked"]
         orders = filter_orders(orders, avoid_fullfilled_status, "fulfillment_status")
-        
+
         avoid_financial_status = ["voided", "refunded", "partially_refunded"]
         orders = filter_orders(orders, avoid_financial_status, "financial_status")
 
@@ -183,7 +184,6 @@ def process_shop(orders_params, shop, proccess_orders_func):
         return (shop, {"error": error_message})
 
 
-
 def adjust_end_date(end_date):
     today = datetime.now()
     if end_date and end_date.date() == today.date():
@@ -193,7 +193,10 @@ def adjust_end_date(end_date):
 
     return end_date or today
 
-def get_unfulfilled_products_by_country(start_date=None, end_date=None, processing_function=None):
+
+def get_unfulfilled_products_by_country(
+    start_date=None, end_date=None, processing_function=None
+):
     created_at_min, created_at_max = format_dates(start_date, end_date)
 
     orders_params = {
@@ -208,14 +211,20 @@ def get_unfulfilled_products_by_country(start_date=None, end_date=None, processi
 
     with multiprocessing.Pool() as pool:
         sku_by_country_counts = dict(
-            pool.starmap(process_shop, [(orders_params, shop, processing_function) for shop in shops])
+            pool.starmap(
+                process_shop,
+                [(orders_params, shop, processing_function) for shop in shops],
+            )
         )
 
     log.info(f"Data retrieved for {len(sku_by_country_counts)} shops")
     return sku_by_country_counts
 
+
 def get_unfulfilled_products(start_date=None, end_date=None):
-    sku_by_country_counts = get_unfulfilled_products_by_country(start_date, end_date, _get_sku_counts)
+    sku_by_country_counts = get_unfulfilled_products_by_country(
+        start_date, end_date, _get_sku_counts
+    )
 
     errors = {}
     for shop in shops:
@@ -237,26 +246,31 @@ def get_unfulfilled_products(start_date=None, end_date=None):
                 sku_sum[sku] = sku_count[sku]
     return errors, sku_sum
 
+
 def get_unfulfilled_products2(start_date=None, end_date=None):
-    sku_by_country_counts = get_unfulfilled_products_by_country(start_date, end_date, _get_order_skus)
+    sku_by_country_counts = get_unfulfilled_products_by_country(
+        start_date, end_date, _get_order_skus
+    )
 
     errors = [
         sku_by_country_counts[shop]["error"]
         for shop in shops
         if "error" in sku_by_country_counts[shop]
     ]
-    
+
     # one flat list if "error" not in shop
     skus_by_order = []
     for shop in shops:
         if "error" not in sku_by_country_counts[shop]:
             skus_by_order.extend(sku_by_country_counts[shop])
 
-
     return errors, skus_by_order
 
+
 def get_unfulfilled_orders_and_line_items(start_date=None, end_date=None):
-    orders_and_line_items = get_unfulfilled_products_by_country(start_date, end_date, _get_orders_and_line_items)
+    orders_and_line_items = get_unfulfilled_products_by_country(
+        start_date, end_date, _get_orders_and_line_items
+    )
 
     errors = [
         orders_and_line_items[shop]["error"]
@@ -271,10 +285,11 @@ def get_unfulfilled_orders_and_line_items(start_date=None, end_date=None):
     ]
 
     # Flatten the list
-    orders_and_line_items = [item for sublist in orders_and_line_items for item in sublist]
+    orders_and_line_items = [
+        item for sublist in orders_and_line_items for item in sublist
+    ]
 
     return errors, orders_and_line_items
-
 
 
 def get_data(start_date=None, end_date=None):
@@ -295,7 +310,9 @@ def get_data(start_date=None, end_date=None):
         "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
         "shops": shops,
     }
-    log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    log.info(
+        f"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}"
+    )
     return output
 
 
@@ -304,7 +321,9 @@ def get_data2(start_date=None, end_date=None):
 
     end_date = adjust_end_date(end_date)
 
-    errors, skus_by_order = get_unfulfilled_products2(start_date=start_date, end_date=end_date)
+    errors, skus_by_order = get_unfulfilled_products2(
+        start_date=start_date, end_date=end_date
+    )
     end = time()
 
     output = {
@@ -315,8 +334,11 @@ def get_data2(start_date=None, end_date=None):
         "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
         "shops": shops,
     }
-    log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    log.info(
+        f"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}"
+    )
     return output
+
 
 def get_data3(start_date=None, end_date=None):
     start = time()
@@ -324,7 +346,9 @@ def get_data3(start_date=None, end_date=None):
     end_date = adjust_end_date(end_date)
 
     # Esta es la función que necesitaríamos implementar para obtener los pedidos y sus line items.
-    errors, orders_and_line_items = get_unfulfilled_orders_and_line_items(start_date=start_date, end_date=end_date)
+    errors, orders_and_line_items = get_unfulfilled_orders_and_line_items(
+        start_date=start_date, end_date=end_date
+    )
     end = time()
 
     # Formatear los datos en la estructura deseada.
@@ -336,9 +360,10 @@ def get_data3(start_date=None, end_date=None):
         "end_date": end_date.strftime("%d-%m-%Y %H:%M:%S"),
         "shops": shops,
     }
-    log.info(F"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}")
+    log.info(
+        f"Data retrieved: from {output['start_date']} to {output['end_date']} taken {output['time_elapsed']}"
+    )
     return output
-
 
 
 # Path: app.py
@@ -355,7 +380,6 @@ def handle_request(processing_function):
     # Get the data and try to convert the start_date and end_date to datetime objects
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
-
 
     try:
         if start_date:
@@ -375,14 +399,15 @@ def handle_request(processing_function):
     # Return the data as JSON
     return data
 
+
 @app.route("/shopify/unfulfilled/sku", methods=["GET"])
 def shopify_unfilfilled_sku():
     return handle_request(get_data)
 
+
 @app.route("/shopify/unfulfilled/skus-by-order", methods=["GET"])
 def shopify_unfilfilled_orders_skus():
     return handle_request(get_data2)
-
 
 
 # to fill divain pro ShopifyOrder and ShopifyOrderLineItem
@@ -390,6 +415,7 @@ def shopify_unfilfilled_orders_skus():
 @app.route("/shopify/unfulfilled/orders_and_line_items", methods=["GET"])
 def shopify_unfilfilled_orders_and_line_items():
     return handle_request(get_data3)
+
 
 if __name__ == "__main__":
     # app.run(debug=True, port=5666)
@@ -403,4 +429,3 @@ if __name__ == "__main__":
     http_server.start()
     log.info("Server started")
     IOLoop.current().start()
-
