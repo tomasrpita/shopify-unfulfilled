@@ -36,8 +36,8 @@ log.addHandler(f_handler)
 load_dotenv()
 
 #  pt is now in EU
-shops = ["ES", "FR", "IT", "NL", "DE", "EU", "UK"]
-# shops = ["DE"]
+# shops = ["ES", "FR", "IT", "NL", "DE", "EU", "UK"]
+shops = ["FR"]
 
 
 def format_dates(start_date=None, end_date=None):
